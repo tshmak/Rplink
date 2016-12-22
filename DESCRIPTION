@@ -1,0 +1,13 @@
+Package: Rplink
+Type: Package
+Title: R interface to Plink 1.9
+Version: 0.1
+Date: 2015-11-09
+Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
+Description: More about what it does (maybe more than one line)
+License: What license is it under?
+LazyData: TRUE
+Author: Timothy Mak
+Maintainer: Timothy Mak <tshmak@hku.hk>
+Imports: Matrix, data.table
+Depends: utils

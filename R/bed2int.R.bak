@@ -1,0 +1,16 @@
+bed2int <- function(con, readlen=floor(.Machine$integer.max / 16),
+                    endian = .Platform$endian) {
+  #' Load a bed file (as a connection) and convert into integer
+  #' readlen=Memory readlen
+
+  raw <- readBin(con, what="raw", n=readlen,endian=endian)
+  stopifnot(readlen*8 < .Machine$integer.max)
+  Bits <- rawToBits(!raw)
+  FirstBit <- as.logical(Bits[c(T,F)])
+  SecondBit <- as.logical(Bits[c(F,T)])
+
+  int <- FirstBit + SecondBit
+  int[!FirstBit & SecondBit] <- NA
+  return(int)
+
+}

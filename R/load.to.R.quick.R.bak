@@ -1,0 +1,59 @@
+load.to.R.quick <- function(bfile, limit=1e9, chr=NULL, ...) {
+  #' Load to R quickly (direct from .bed)
+  #' Can only load entire .bed file or by chromosome
+  nrow <- nrow.bfile(bfile)
+  nrow.ceil <- ceiling(nrow / 4) * 4
+  ncol <- ncol.bfile(bfile)
+
+  if(is.null(chr)) size <- nrow.ceil * ncol else {
+    stopifnot(length(chr) == 1)
+    bim <- read.table2(paste0(bfile, ".bim"))
+    chrs <- recodeXYM(bim$V1)
+    chr <- recodeXYM(chr)
+    ncol <- sum(chrs == chr)
+    stopifnot(ncol > 0)
+
+    n.before.SNP <- sum(chrs < chr)
+    end.SNP <- n.before.SNP + ncol
+    size <- nrow.ceil * ncol
+
+  }
+
+  #### Check for limit violations ####
+  stopifnot(size * 4 + 40 <= limit)
+  stopifnot(size <= .Machine$integer.max)
+
+  #### Split into chunks ####
+  max.chunk.size <- .Machine$integer.max
+  if(size > max.chunk.size) {
+    ncol.chunk <- floor(max.chunk.size / nrow.ceil)
+    nchunks <- ncol %/% ncol.chunk + 1
+    ncol.chunks <- rep(ncol.chunk, nchunks)
+    ncol.chunks[nchunks] <- ncol %% ncol.chunk
+  } else {
+    ncol.chunks <- ncol
+    nchunks <- 1
+  }
+  chunk.size <- ncol.chunks * nrow.ceil
+
+  #### seek to location ####
+  con <- file(paste0(bfile, ".bed"), open="rb")
+  seek(con, where = 3)
+  if(!is.null(chr)) {
+    seek(con, nrow.ceil / 4 * n.before.SNP, origin="current")
+  }
+
+  #### read... ####
+  int <- integer(size)
+  end <- cumsum(chunk.size)
+  start <- end - chunk.size + 1
+  for(i in 1:nchunks) {
+    int[start[i]:end[i]] <- bed2int(con, readlen = chunk.size[i]/4 ,...)
+  }
+
+  close(con)
+  mat <- matrix(int, nrow=nrow.ceil)
+  mat <- mat[1:nrow, ]
+  return(mat)
+
+}
