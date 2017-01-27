@@ -11,7 +11,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
                   test=F,
                   savelog=T,
                   threads=NULL,
-                  memory=NULL, 
+                  memory=NULL,
                   replace.bim=NULL,
                   replace.fam=NULL,
                   ...) {
@@ -52,7 +52,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
 #
 #   savelog: By default, the log file''s content will be saved as an attribute
 #   to the returned value.
-  
+
 
   pars <- list(class="plinkout")
   if(cmd == "") stop("cmd must be specified. Perhaps it should be --make-bed?")
@@ -76,18 +76,55 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     pars$fam <- paste0(pars$bfile, ".fam")
     pars$bim <- paste0(pars$bfile, ".bim")
   }
-  
+
   ## replace.bim/replace.fam
   if(!is.null(replace.bim) || !is.null(replace.fam)) {
     if(bfile == "") stop("bfile must be specified!")
     pars$bed <- paste0(pars$bfile, ".bed")
-    if(!is.null(replace.bim)) pars$bim <- replace.bim
-    if(!is.null(replace.fam)) pars$fam <- replace.fam
-    bfile <- paste("--bed", pars$bed, 
-                   "--bim", pars$bim, 
-                   "--fam", pars$fam) 
+
+    ## replace.bim
+    if(!is.null(replace.bim)) {
+
+      if(is.character(replace.bim) && length(replace.bim) == 1) {
+        ## A file is given
+        pars$bim <- replace.bim
+      }
+      else if(is.data.frame(replace.bim)) {
+        # stopifnot(nrow(replace.bim) == ncol.bfile(bfile))
+        write.table2(replace.bim,
+                     file=replace.bimfile <- tempfile(pattern="replace.bim"))
+        pars$bim <- replace.bimfile
+      }
+      else {
+        stop("Don't know what to do yet...")
+      }
+
+    }
+
+    ## replace.fam
+    if(!is.null(replace.fam)) {
+
+      if(is.character(replace.fam) && length(replace.fam) == 1) {
+        ## A file is given
+        pars$fam <- replace.fam
+      }
+      else if(is.data.frame(replace.fam)) {
+        # stopifnot(nrow(replace.fam) == nrow.bfile(bfile))
+        write.table2(replace.fam,
+                     file=replace.famfile <- tempfile(pattern="replace.fam"))
+        pars$bim <- replace.famfile
+      }
+      else {
+        stop("Don't know what to do yet...")
+      }
+
+    }
+
+    bfile <- paste("--bed", pars$bed,
+                   "--bim", pars$bim,
+                   "--fam", pars$fam)
   }
-  
+
   ## out
   pars$out <- out
   out <- paste("--out", out)
@@ -216,7 +253,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   else {
     stop("Don't know what to do yet...")
   }
-  
+
   ## chr
   if(is.null(chr)) chr <- ""
   else {
@@ -251,7 +288,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   else {
     stop("Don't know what to do yet...")
   }
-  
+
   ## covar
   if(is.null(covar)) covar <- ""
   else if(is.character(covar) && length(covar) == 1) {
@@ -276,7 +313,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   else {
     stop("Don't know what to do yet...")
   }
-  
+
   ## seed
   if(!is.null(seed)) {
     pars$seed <- seed
@@ -290,14 +327,14 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     threads <- paste("--threads", threads)
   }
   else threads <- ""
-  
+
   ## memory
   if(!is.null(memory)) {
     pars$memory <- memory
     memory <- paste("--memory", memory)
   }
   else memory <- ""
-  
+
   ## silent
   if(silent) silent <- "--silent" else
     silent <- ""
@@ -305,14 +342,14 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   ## allow.no.sex
   if(allow.no.sex) allow.no.sex <- "--allow-no-sex" else
     allow.no.sex <- ""
-  
+
   ## keep.allele.order
   if(keep.allele.order) keep.allele.order <- "--keep-allele-order" else
     keep.allele.order <- ""
-  
+
   #################################################################
   plink.command <- paste(bfile, out, keep, remove, extract, exclude,
-                         chr, pheno, covar, seed, threads, memory, silent, 
+                         chr, pheno, covar, seed, threads, memory, silent,
                          allow.no.sex, keep.allele.order, cmd)
   outfile <- gsub(pattern="^--out ", "", out)
 
