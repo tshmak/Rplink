@@ -8,6 +8,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
                   allow.no.sex=T,
                   keep.allele.order=T,
                   cmd="",
+                  add.cmd="", 
                   test=F,
                   savelog=T,
                   threads=NULL,
@@ -350,7 +351,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   #################################################################
   plink.command <- paste(bfile, out, keep, remove, extract, exclude,
                          chr, pheno, covar, seed, threads, memory, silent,
-                         allow.no.sex, keep.allele.order, cmd)
+                         allow.no.sex, keep.allele.order, cmd, add.cmd)
   outfile <- gsub(pattern="^--out ", "", out)
 
   if(test) {

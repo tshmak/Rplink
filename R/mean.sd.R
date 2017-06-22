@@ -9,7 +9,9 @@ mean.sd <- function(...) {
   sumx2 <- data %*% c(4,1,0)
   var <- as.vector(sumx2)/n - meanx^2
   var <- var * (n-1)/n
+  maf <- 0.5 - abs(meanx - 1) / 2
   
-  return(cbind(freqx2, data.frame(mean=meanx, var=var, sd=sqrt(var))))
+  return(cbind(freqx2, data.frame(mean=meanx, maf=maf, 
+                                  var=var, sd=sqrt(var))))
   
 }
