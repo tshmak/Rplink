@@ -8,7 +8,6 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
                   allow.no.sex=T,
                   keep.allele.order=T,
                   cmd="",
-                  add.cmd="", 
                   test=F,
                   savelog=T,
                   threads=NULL,
@@ -54,34 +53,28 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
 #   savelog: By default, the log file''s content will be saved as an attribute
 #   to the returned value.
 
-
   pars <- list(class="plinkout")
   if(cmd == "") stop("cmd must be specified. Perhaps it should be --make-bed?")
 
   ## bfile
   if(is.null(bfile)) {
     if(exists(".bfile", envir=.GlobalEnv, inherits=F)) {
-      pars$bfile <- get(".bfile", envir=.GlobalEnv, inherits=F)
-      pars$fam <- paste0(pars$bfile, ".fam")
-      pars$bim <- paste0(pars$bfile, ".bim")
-      bfile <- paste("--bfile", pars$bfile)
+      .bfile <- get(".bfile", envir=.GlobalEnv, inherits=F)
+      if(inherits(.bfile, "bfile")) {
+        pars$bfile <- .bfile
+      }
     }
-    else bfile <- ""
-  }
-  else if(bfile=="") {
-    bfile <- ""
-  }
-  else {
+  } else if(bfile=="") {
+    # Do nothing
+  } else {
     pars$bfile <- bfile
-    bfile <- paste("--bfile", bfile)
-    pars$fam <- paste0(pars$bfile, ".fam")
-    pars$bim <- paste0(pars$bfile, ".bim")
   }
 
   ## replace.bim/replace.fam
   if(!is.null(replace.bim) || !is.null(replace.fam)) {
     if(bfile == "") stop("bfile must be specified!")
     pars$bed <- paste0(pars$bfile, ".bed")
+    pars$bfile <- NULL
 
     ## replace.bim
     if(!is.null(replace.bim)) {
@@ -113,7 +106,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
         # stopifnot(nrow(replace.fam) == nrow.bfile(bfile))
         write.table2(replace.fam,
                      file=replace.famfile <- tempfile(pattern="replace.fam"))
-        pars$bim <- replace.famfile
+        pars$fam <- replace.famfile
       }
       else {
         stop("Don't know what to do yet...")
@@ -121,50 +114,40 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
 
     }
 
-    bfile <- paste("--bed", pars$bed,
-                   "--bim", pars$bim,
-                   "--fam", pars$fam)
   }
 
   ## out
   pars$out <- out
-  out <- paste("--out", out)
 
   ## keep
-  if(is.null(keep)) keep <- ""
-  else if(is.character(keep) && length(keep) == 1) {
+  if(is.null(keep)) {
+    keep <- ""
+  } else if(is.character(keep) && length(keep) == 1) {
     ## A file is given
     pars$keep <- keep
-    keep <- paste("--keep", keep)
-  }
-  else if(is.logical(keep)) {
+  } else if(is.logical(keep)) {
     ## A vector of logicals is given
     famfile <- read.table2(pars$fam)
     stopifnot(length(keep) == nrow(famfile))
     kept.famfile <- famfile[keep, ]
     write.table2(kept.famfile, file=keepfile <- tempfile(pattern="keep"))
     pars$keep <- keepfile
-    keep <- paste("--keep", keepfile)
-  }
-  else if(is.list(keep)) {
+  } else if(is.list(keep)) {
     stopifnot(!is.null(keep$FID) && !is.null(keep$IID))
     write.table2(data.frame(FID=keep$FID, IID=keep$IID),
                 file=keepfile <- tempfile(pattern="keep"))
     pars$keep <- keepfile
-    keep <- paste("--keep", keepfile)
-  }
-  else {
+  } else {
     stop("Don't know what to do yet...")
   }
 
   ## remove
-  if(is.null(remove)) remove <- ""
-  else if(is.character(remove) && length(remove) == 1) {
+  if(is.null(remove)) {
+    remove <- ""
+  } else if(is.character(remove) && length(remove) == 1) {
     ## A file is given
     pars$remove <- remove
-    remove <- paste("--remove", remove)
-  }
-  else if(is.logical(remove)) {
+  } else if(is.logical(remove)) {
     ## A vector of logicals is given
     if(!exists("famfile", inherits=F))
       famfile <- read.table2(pars$fam)
@@ -172,22 +155,20 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     kept.famfile <- famfile[remove, ]
     write.table2(kept.famfile, file=removefile <- tempfile(pattern="remove"))
     pars$remove <- removefile
-    remove <- paste("--remove", removefile)
-  }
-  else if(is.list(remove)) {
+  } else if(is.list(remove)) {
     stopifnot(!is.null(remove$FID) && !is.null(remove$IID))
     write.table2(data.frame(FID=remove$FID, IID=remove$IID),
                 file=removefile <- tempfile(pattern="remove"))
     pars$remove <- removefile
     remove <- paste("--remove", removefile)
-  }
-  else {
+  } else {
     stop("Don't know what to do yet...")
   }
 
   ## extract
-  if(is.null(extract)) extract <- ""
-  else if(is.logical(extract)) {
+  if(is.null(extract)) {
+    extract <- ""
+  } else if(is.logical(extract)) {
     ## A vector of logicals is given
     bimfile <- read.table2(pars$bim)
     stopifnot(length(extract) == nrow(bimfile))
@@ -195,9 +176,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     kept.bimfile <- bimfile[extract, 2, drop=F]
     write.table2(kept.bimfile, file=extractfile <- tempfile(pattern="extract"))
     pars$extract <- extractfile
-    extract <- paste("--extract", extractfile)
-  }
-  else if(is.vector(extract)) {
+  } else if(is.vector(extract)) {
     if(is.numeric(extract))
       stop("We need a list of SNP IDs not numeric vector.
            Try convert to a logical vector")
@@ -206,7 +185,6 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
         if(file.exists(extract)) {
           ## A file is given
           pars$extract <- extract
-          extract <- paste("--extract", extract)
         }
       }
       if(is.null(pars$extract)) {
@@ -215,14 +193,14 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
         extract <- paste("--extract", extractfile)
       }
     } else stop("I don't know what your 'extract' input is")
-  }
-  else {
+  } else {
     stop("Don't know what to do yet...")
   }
 
   ## exclude
-  if(is.null(exclude)) exclude <- ""
-  else if(is.logical(exclude)) {
+  if(is.null(exclude)) {
+    exclude <- ""
+  } else if(is.logical(exclude)) {
     ## A vector of logicals is given
     bimfile <- read.table2(pars$bim)
     stopifnot(length(exclude) == nrow(bimfile))
@@ -230,13 +208,12 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     kept.bimfile <- bimfile[exclude, 2, drop=F]
     write.table2(kept.bimfile, file=excludefile <- tempfile(pattern="exclude"))
     pars$exclude <- excludefile
-    exclude <- paste("--exclude", excludefile)
-  }
-  else if(is.vector(exclude)) {
-    if(is.numeric(exclude))
+  } else if(is.vector(exclude)) {
+    if(is.numeric(exclude)) {
       stop("We need a list of SNP IDs not numeric vector.
            Try convert to a logical vector")
-    else if(is.character(exclude)) {
+
+    } else if(is.character(exclude)) {
       if(length(exclude) == 1)  {
         if(file.exists(exclude)) {
           ## A file is given
@@ -250,116 +227,97 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
         exclude <- paste("--exclude", excludefile)
       }
     } else stop("I don't know what your 'exclude' input is")
-  }
-  else {
+  } else {
     stop("Don't know what to do yet...")
   }
 
   ## chr
-  if(is.null(chr)) chr <- ""
-  else {
+  if(!is.null(chr)) {
     pars$chr <- paste(chr, collapse=",")
-    chr <- paste("--chr", pars$chr)
   }
-
 
   ## pheno
-  if(is.null(pheno)) pheno <- ""
-  else if(is.character(pheno) && length(pheno) == 1) {
-    ## A file is given
-    pars$pheno <- pheno
-    pheno <- paste("--no-pheno --pheno", pheno)
-  }
-  else if(is.numeric(pheno) || is.data.frame(pheno)) {
-    if(is.data.frame(pheno)) {
-      stopifnot(c("FID", "IID" %in% colnames(pheno)))
-      stopifnot(ncol(pheno) == 3)
+  if(!is.null(pheno)) {
+    if(is.character(pheno) && length(pheno) == 1) {
+      ## A file is given
+      pars$pheno <- pheno
+      pars$no.pheno <- ""
+    } else if(is.numeric(pheno) || is.data.frame(pheno)) {
+      if(is.data.frame(pheno)) {
+        stopifnot(c("FID", "IID" %in% colnames(pheno)))
+        stopifnot(ncol(pheno) == 3)
+      } else {
+        if(!exists("famfile", inherits=F))
+          famfile <- read.table2(pars$fam)
+        pheno.data.frame <- famfile[,1:2]
+        stopifnot(length(pheno) == nrow(famfile))
+        pheno <- cbind(pheno.data.frame, pheno)
+      }
+      write.table2(pheno,
+                   file=phenofile <- tempfile(pattern="pheno"))
+      pars$pheno <- phenofile
+      pars$no.pheno <- ""
     } else {
-      if(!exists("famfile", inherits=F))
-        famfile <- read.table2(pars$fam)
-      pheno.data.frame <- famfile[,1:2]
-      stopifnot(length(pheno) == nrow(famfile))
-      pheno <- cbind(pheno.data.frame, pheno)
+      stop("Don't know what to do yet...")
     }
-    write.table2(pheno,
-                 file=phenofile <- tempfile(pattern="pheno"))
-    pars$pheno <- phenofile
-    pheno <- paste("--no-pheno --pheno", phenofile)
   }
-  else {
-    stop("Don't know what to do yet...")
-  }
-
   ## covar
-  if(is.null(covar)) covar <- ""
-  else if(is.character(covar) && length(covar) == 1) {
-    ## A file is given
-    pars$covar <- covar
-    covar <- paste("--covar", covar)
-  }
-  else if(is.numeric(covar) || is.data.frame(covar)) {
-    if(is.vector(covar)) covar <- matrix(covar, ncol=1)
-    if(is.matrix(covar)) covar <- as.data.frame(covar)
-    if(!all(c("FID", "IID") %in% colnames(covar))) {
-      if(!exists("famfile", inherits=F))
-        famfile <- read.table2(pars$fam)
-      covar.data.frame <- famfile[,1:2]
-      stopifnot(nrow(covar) == nrow(famfile))
-      covar <- cbind(covar.data.frame, covar)
+  if(!is.null(covar)) {
+    if(is.character(covar) && length(covar) == 1) {
+      ## A file is given
+      pars$covar <- covar
+    } else if(is.numeric(covar) || is.data.frame(covar)) {
+      if(is.vector(covar)) covar <- matrix(covar, ncol=1)
+      if(is.matrix(covar)) covar <- as.data.frame(covar)
+      if(!all(c("FID", "IID") %in% colnames(covar))) {
+        if(!exists("famfile", inherits=F))
+          famfile <- read.table2(pars$fam)
+        covar.data.frame <- famfile[,1:2]
+        stopifnot(nrow(covar) == nrow(famfile))
+        covar <- cbind(covar.data.frame, covar)
+      }
+      write.table2(covar,file=covarfile <- tempfile(pattern="covar"))
+      pars$covar <- covarfile
+    } else {
+      stop("Don't know what to do yet...")
     }
-    write.table2(covar,file=covarfile <- tempfile(pattern="covar"))
-    pars$covar <- covarfile
-    covar <- paste("--covar", covarfile)
-  }
-  else {
-    stop("Don't know what to do yet...")
   }
 
   ## seed
   if(!is.null(seed)) {
     pars$seed <- seed
-    seed <- paste("--seed", seed)
   }
-  else seed <- ""
 
   ## threads
   if(!is.null(threads)) {
     pars$threads <- threads
-    threads <- paste("--threads", threads)
   }
-  else threads <- ""
 
   ## memory
   if(!is.null(memory)) {
     pars$memory <- memory
-    memory <- paste("--memory", memory)
   }
-  else memory <- ""
 
   ## silent
-  if(silent) silent <- "--silent" else
-    silent <- ""
+  if(silent) pars$silent <- ""
 
   ## allow.no.sex
-  if(allow.no.sex) allow.no.sex <- "--allow-no-sex" else
-    allow.no.sex <- ""
+  if(allow.no.sex) pars$allow.no.sex <- ""
 
   ## keep.allele.order
-  if(keep.allele.order) keep.allele.order <- "--keep-allele-order" else
-    keep.allele.order <- ""
+  if(keep.allele.order) pars$keep.allele.order <- ""
 
   #################################################################
-  plink.command <- paste(bfile, out, keep, remove, extract, exclude,
-                         chr, pheno, covar, seed, threads, memory, silent,
-                         allow.no.sex, keep.allele.order, cmd, add.cmd)
-  outfile <- gsub(pattern="^--out ", "", out)
+  plink.command <- parse.plink.options(pars)
+  plink.command <- paste(plink.command, cmd)
+
+  outfile <- pars$out
 
   if(test) {
     attributes(plink.command) <- pars
     return(plink.command)
-  }
-  else {
-    run.plink(plink.command, ...)
+  } else {
+    run.plink(plink.command)
     attributes(outfile) <- pars
     if(savelog) {
       logfile <- paste0(outfile, ".log")
