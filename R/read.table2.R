@@ -13,6 +13,12 @@ read.table2 <- function(..., fread=getOption("Rplink.use.fread"))  {
   options <- list(...)
   if(is.null(options$header)) {
     options2 <- options
+    if(!is.null(names(options2))) {
+      ok.for.read.table <- !is.na(pmatch(names(options2), 
+                                         names(formals(read.table)))) |
+        names(options2) == ""
+      options2 <- options2[ok.for.read.table]
+    }
     options2$stringsAsFactors <- NULL
     options2$nrows <- NULL
     options2$skip <- NULL

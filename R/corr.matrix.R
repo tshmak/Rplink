@@ -4,6 +4,8 @@ corr.matrix <- function(..., lag=10, R2=F, window.kb=1e5, cov=F,
   ### using Plink's --r or --r2
   ### cov: Report covariance rather than correlation
 
+  stop("Deprecated... Try the sparseSummary2sparseMatrix() function in General")
+
   if(cov && !matrix) stop("Must request matrix form for cov")
   
   cmd <- ifelse(R2, "--r2", "--r")
