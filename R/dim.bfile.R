@@ -1,21 +1,20 @@
-dim.bfile <- function(bfile) {
-  #### Determine number of rows in bfile
-  if(exists(".bfile", envir=.GlobalEnv) ) {
-    .bfile <- get(".bfile", envir=.GlobalEnv)
-    if(bfile == .bfile ) {
-      if(is.null(attr(.bfile, "Dim"))) {
-        bim <- read.table2(paste0(bfile, ".bim"))
-        fam <- read.table2(paste0(bfile, ".fam"))
-        attr(.bfile, "Dim")  <- c(nrow(fam), nrow(bim))
-        assign(".bfile", .bfile, envir=.GlobalEnv)
-        
-      } 
-      return(attr(.bfile, "Dim"))
-    }
-  }
+dim.bfile <- function(bfile, dim=c(1:2)) {
 
-  bim <- read.table2(paste0(bfile, ".bim"))
-  fam <- read.table2(paste0(bfile, ".fam"))
-  return(c(nrow(fam), nrow(bim)))
- 
+  #' S3 method for
+  n <- integer(0)
+  for(i in dim) {
+    if(i == 1) {
+      file <- paste0(bfile, ".fam")
+    } else if(i == 2) {
+      file <- paste0(bfile, ".bim")
+    }
+    if(Sys.info()["sysname"] == "Windows") {
+      wc.output <- shell(paste("wc -l", file), intern=T)
+    } else {
+      wc.output <- system(paste("wc -l", file), intern=T)
+    }
+    n <- c(n, as.numeric(strsplit(wc.output, split = "\\s+")[[1]][1]))
+
+  }
+  return(n)
 }
