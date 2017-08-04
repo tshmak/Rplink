@@ -1,5 +1,5 @@
 plink.clump <- function(pvals, r2, p1=1, p2=1, kb=250, allow.overlap=F, 
-                        prune=T, load=F, ...) {
+                        prune=F, load=F, ...) {
   #' FUnction to call plink --clump using user-supplied p-values
   #' A number of options not implemented here. Need to call plink() directly for those.
   #' @param pvals can be given as a vector (must equal number of SNPs), or 
@@ -41,10 +41,15 @@ plink.clump <- function(pvals, r2, p1=1, p2=1, kb=250, allow.overlap=F,
   options2 <- list()
   options2$extract  <- read.table.plink(outfile,ext = ".clumped")$SNP
   options2$cmd <- "--make-bed"
-  options2$out <- outfile
+  options2$bfile <- outfile
   
   if(!load) {
-    return(do.call("plink", options2))
+    options2$out <- outfile
+    d <- do.call("plink", options2)
+    file.remove(paste0(outfile, ".bed~"))
+    file.remove(paste0(outfile, ".bim~"))
+    file.remove(paste0(outfile, ".fam~"))
+    return(d)
   }
   out <- do.call("plink", options2)
   options2$out <- outfile
