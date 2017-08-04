@@ -14,47 +14,74 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
                   memory=NULL,
                   replace.bim=NULL,
                   replace.fam=NULL,
+                  pfile=NULL,
+                  plink2=FALSE,
                   ...) {
 
-#   Wrapper function to call plink with various defaults. Function will return
-#   the argument of 'out', which is just a filename stub. But you can access the
-#   various files produced by plink following the stub.
-#
-#   bfile: The --bfile option. If this is not specified, we'll look for a
-#   variable called .bfile in the Global environment. Use bfile() to define
-#   these to save you having to define these every time.
-#
-#   out: The --out option. By default, we'll use a temporary file. You can of
-#   course specify your own.
-#
-#   keep, remove: Sample filtering. Can be given as a filename, or a logical
-#   vector (same length as .fam file), or a data.frame/list with two variables:
-#   FID, IID.
-#
-#   extract, exclude: Variant filtering. Can be given as a filename, or a
-#   logical vector (same length as .bim file), or a character vector of rs IDs.
-#
-#   chr: Can be given as a string or a numeric vector.
-#
-#   pheno: Specify an alternative phenotype. Phenotype can be given as a numeric
-#   vector (same length as .fam file) or a filename. The --no-pheno option will
-#   be automatically added, so that the original phenotype in the .fam file is
-#   ignored. Multiple phenotype is not supported at the moment.
-#
-#   seed: Integer from 0 to 2^32 - 1
-#
-#   silent: The --silent option
-#
-#   cmd: All other arguments to pass to plink, e.g. --assoc --1
-#
-#   test: If test==T, the plink command is not run, but all the arguments are
-#   returned as a string for you to check.
-#
-#   savelog: By default, the log file''s content will be saved as an attribute
-#   to the returned value.
+  #   Wrapper function to call plink with various defaults. Function will return
+  #   the argument of 'out', which is just a filename stub. But you can access the
+  #   various files produced by plink following the stub.
+  #
+  #   bfile: The --bfile option. If this is not specified, we'll look for a
+  #   variable called .bfile in the Global environment. Use bfile() to define
+  #   these to save you having to define these every time.
+  #
+  #   out: The --out option. By default, we'll use a temporary file. You can of
+  #   course specify your own.
+  #
+  #   keep, remove: Sample filtering. Can be given as a filename, or a logical
+  #   vector (same length as .fam file), or a data.frame/list with two variables:
+  #   FID, IID.
+  #
+  #   extract, exclude: Variant filtering. Can be given as a filename, or a
+  #   logical vector (same length as .bim file), or a character vector of rs IDs.
+  #
+  #   chr: Can be given as a string or a numeric vector.
+  #
+  #   pheno: Specify an alternative phenotype. Phenotype can be given as a numeric
+  #   vector (same length as .fam file) or a filename. The --no-pheno option will
+  #   be automatically added, so that the original phenotype in the .fam file is
+  #   ignored. Multiple phenotype is not supported at the moment.
+  #
+  #   seed: Integer from 0 to 2^32 - 1
+  #
+  #   silent: The --silent option
+  #
+  #   cmd: All other arguments to pass to plink, e.g. --assoc --1
+  #
+  #   test: If test==T, the plink command is not run, but all the arguments are
+  #   returned as a string for you to check.
+  #
+  #   savelog: By default, the log file''s content will be saved as an attribute
+  #   to the returned value.
 
   pars <- list(class="plinkout")
   if(cmd == "") stop("cmd must be specified. Perhaps it should be --make-bed?")
+
+  ## pfile
+  if(plink2) {
+    if(is.null(pfile)) {
+      if(exists(".bfile", envir=.GlobalEnv, inherits=F)) {
+        .bfile <- get(".bfile", envir=.GlobalEnv, inherits=F)
+        if(inherits(.bfile, "pfile")) {
+          pars$pfile <- .bfile
+        }
+      }
+    } else if(pfile=="") {
+      stop("Why do you need to run plink2 if you're not using pfile?")
+    } else if(!is.null(bfile)) {
+      if(bfile != pfile) stop("If you specify both pfile and bfile, they should have the same stub.")
+      pars$pbfile <- pfile
+    } else {
+      pars$pfile <- pfile
+    }
+
+    if(pfile != "") {
+      .bed <- paste0(pars$pfile, ".pgen")
+      .bim <- paste0(pars$pfile, ".pvar")
+      .fam <- paste0(pars$pfile, ".psam")
+    }
+  }
 
   ## bfile
   if(is.null(bfile)) {
@@ -70,10 +97,18 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     pars$bfile <- bfile
   }
 
+  if(bfile != "") {
+    .bed <- paste0(pars$bfile, ".bed")
+    .bim <- paste0(pars$bfile, ".bim")
+    .fam <- paste0(pars$bfile, ".fam")
+  }
+
   ## replace.bim/replace.fam
   if(!is.null(replace.bim) || !is.null(replace.fam)) {
     if(bfile == "") stop("bfile must be specified!")
-    pars$bed <- paste0(pars$bfile, ".bed")
+    pars$bed <- .bed
+    pars$bim <- .bim
+    pars$fam <- .fam
     pars$bfile <- NULL
 
     ## replace.bim
@@ -127,7 +162,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     pars$keep <- keep
   } else if(is.logical(keep)) {
     ## A vector of logicals is given
-    famfile <- read.table2(pars$fam)
+    famfile <- read.table2(.fam)
     stopifnot(length(keep) == nrow(famfile))
     kept.famfile <- famfile[keep, ]
     write.table2(kept.famfile, file=keepfile <- tempfile(pattern="keep"))
@@ -135,7 +170,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   } else if(is.list(keep)) {
     stopifnot(!is.null(keep$FID) && !is.null(keep$IID))
     write.table2(data.frame(FID=keep$FID, IID=keep$IID),
-                file=keepfile <- tempfile(pattern="keep"))
+                 file=keepfile <- tempfile(pattern="keep"))
     pars$keep <- keepfile
   } else {
     stop("Don't know what to do yet...")
@@ -150,7 +185,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   } else if(is.logical(remove)) {
     ## A vector of logicals is given
     if(!exists("famfile", inherits=F))
-      famfile <- read.table2(pars$fam)
+      famfile <- read.table2(.fam)
     stopifnot(length(remove) == nrow(famfile))
     kept.famfile <- famfile[remove, ]
     write.table2(kept.famfile, file=removefile <- tempfile(pattern="remove"))
@@ -158,9 +193,8 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   } else if(is.list(remove)) {
     stopifnot(!is.null(remove$FID) && !is.null(remove$IID))
     write.table2(data.frame(FID=remove$FID, IID=remove$IID),
-                file=removefile <- tempfile(pattern="remove"))
+                 file=removefile <- tempfile(pattern="remove"))
     pars$remove <- removefile
-    remove <- paste("--remove", removefile)
   } else {
     stop("Don't know what to do yet...")
   }
@@ -170,7 +204,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     extract <- ""
   } else if(is.logical(extract)) {
     ## A vector of logicals is given
-    bimfile <- read.table2(pars$bim)
+    bimfile <- read.table2(.bim)
     stopifnot(length(extract) == nrow(bimfile))
     # stopifnot(length(unique(bimfile[,2])) == nrow(bimfile))
     kept.bimfile <- bimfile[extract, 2, drop=F]
@@ -190,7 +224,6 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
       if(is.null(pars$extract)) {
         write.table2(extract, file=extractfile <- tempfile(pattern="extract"))
         pars$extract <- extractfile
-        extract <- paste("--extract", extractfile)
       }
     } else stop("I don't know what your 'extract' input is")
   } else {
@@ -202,7 +235,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     exclude <- ""
   } else if(is.logical(exclude)) {
     ## A vector of logicals is given
-    bimfile <- read.table2(pars$bim)
+    bimfile <- read.table2(.bim)
     stopifnot(length(exclude) == nrow(bimfile))
     stopifnot(length(unique(bimfile[,2])) == nrow(bimfile))
     kept.bimfile <- bimfile[exclude, 2, drop=F]
@@ -248,7 +281,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
         stopifnot(ncol(pheno) == 3)
       } else {
         if(!exists("famfile", inherits=F))
-          famfile <- read.table2(pars$fam)
+          famfile <- read.table2(.fam)
         pheno.data.frame <- famfile[,1:2]
         stopifnot(length(pheno) == nrow(famfile))
         pheno <- cbind(pheno.data.frame, pheno)
@@ -271,7 +304,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
       if(is.matrix(covar)) covar <- as.data.frame(covar)
       if(!all(c("FID", "IID") %in% colnames(covar))) {
         if(!exists("famfile", inherits=F))
-          famfile <- read.table2(pars$fam)
+          famfile <- read.table2(.fam)
         covar.data.frame <- famfile[,1:2]
         stopifnot(nrow(covar) == nrow(famfile))
         covar <- cbind(covar.data.frame, covar)
