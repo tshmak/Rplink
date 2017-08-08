@@ -74,13 +74,15 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
       pars$pfile <- pfile
     }
 
-    if(pfile != "") {
+    if(!is.null(pars$pfile)) {
       .bed <- paste0(pars$pfile, ".pgen")
       .bim <- paste0(pars$pfile, ".pvar")
       .fam <- paste0(pars$pfile, ".psam")
     }
     class(pfile) <- unique(c("pfile", class(pfile)))
 
+  } else {
+    if(!is.null(pfile)) stop("pfile can only be specified with the plink2 option.")
   }
 
   ## bfile
@@ -95,7 +97,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     pars$bfile <- bfile
   }
 
-  if(bfile != "") {
+  if(!is.null(pars$bfile)) {
     .bed <- paste0(pars$bfile, ".bed")
     .bim <- paste0(pars$bfile, ".bim")
     .fam <- paste0(pars$bfile, ".fam")
@@ -161,7 +163,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     pars$keep <- keep
   } else if(is.logical(keep)) {
     ## A vector of logicals is given
-    famfile <- read.table2(.fam)
+    famfile <- read.fam(.fam, pfile=!is.null(pars$pfile), add.ext=F)
     stopifnot(length(keep) == nrow(famfile))
     kept.famfile <- famfile[keep, ]
     write.table2(kept.famfile, file=keepfile <- tempfile(pattern="keep"))
@@ -338,6 +340,8 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   if(keep.allele.order) pars$keep.allele.order <- ""
 
   #################################################################
+  options <- list(...)
+  pars <- c(pars, options)
   plink.command <- parse.plink.options(pars)
   plink.command <- paste(plink.command, cmd)
 
@@ -348,7 +352,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   } else {
     pars$class <- "plinkout"
     outfile <- pars$out
-    run.plink(plink.command)
+    run.plink(plink.command, plink2=plink2)
     attributes(outfile) <- pars
 
     logfile <- paste0(outfile, ".log")

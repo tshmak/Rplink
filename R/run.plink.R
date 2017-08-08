@@ -12,7 +12,7 @@ run.plink <- function(cmd, plink2=FALSE) {
   } else {
     Command <- "system"
   }
-  args <- list(cmd=paste(plink.exec, cmd))
+  args <- list(paste(plink.exec, cmd))
 
   do.call(Command, args)
 
