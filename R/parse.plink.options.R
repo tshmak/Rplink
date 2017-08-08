@@ -4,8 +4,8 @@ parse.plink.options <- function(options) {
   Names <- gsub("\\.", "-", names)
   cmd <- ""
   for(i in 1:l) {
-    if(is.null(l[[i]])) l[[i]] <- ""
-    cmd <- paste(cmd, paste0("--", Names[i]), l[[i]])
+    if(is.null(options[[i]])) options[[i]] <- ""
+    cmd <- paste(cmd, paste0("--", Names[i]), options[[i]])
   }
   return(cmd)
 }

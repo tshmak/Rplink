@@ -15,7 +15,7 @@ plink.table <- function(...) {
 # print(outfilestub.search)
 ###############
 
-  m <- gregexpr(paste0(outfilestub.search, "\\.[[:alnum:]_\\.-]+"), log)
+  m <- gregexpr(paste0(outfilestub.search, "\\.[[:alnum:]_\\.-]*[[:alnum:]_-]"), log)
   matches <- unique(regmatches(log, m)[[1]])
   if(length(matches) == 1) {
     table <- read.table2(matches)

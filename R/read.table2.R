@@ -14,7 +14,7 @@ read.table2 <- function(..., fread=getOption("Rplink.use.fread"))  {
   if(is.null(options$header)) {
     options2 <- options
     if(!is.null(names(options2))) {
-      ok.for.read.table <- !is.na(pmatch(names(options2), 
+      ok.for.read.table <- !is.na(pmatch(names(options2),
                                          names(formals(read.table)))) |
         names(options2) == ""
       options2 <- options2[ok.for.read.table]
@@ -25,10 +25,11 @@ read.table2 <- function(..., fread=getOption("Rplink.use.fread"))  {
     options$header <- do.call("check.header", options2)
   }
   if(is.null(options$stringsAsFactors)) options$stringsAsFactors <- F
+  if(is.null(options$check.names)) options$check.names <- T
 
   if(is.null(fread)) fread <- F
   if(!fread) {
-    return(do.call("read.table",options)) 
+    return(do.call("read.table",options))
   } else {
     if(is.null(options$data.table)) options$data.table <- F
     df <- do.call(data.table::fread,options)

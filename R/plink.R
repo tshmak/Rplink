@@ -55,23 +55,21 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   #   savelog: By default, the log file''s content will be saved as an attribute
   #   to the returned value.
 
-  pars <- list(class="plinkout")
   if(cmd == "") stop("cmd must be specified. Perhaps it should be --make-bed?")
+  pars <- list()
 
   ## pfile
   if(plink2) {
     if(is.null(pfile)) {
       if(exists(".bfile", envir=.GlobalEnv, inherits=F)) {
         .bfile <- get(".bfile", envir=.GlobalEnv, inherits=F)
-        if(inherits(.bfile, "pfile")) {
-          pars$pfile <- .bfile
-        }
+        pars$pfile <- .bfile
       }
     } else if(pfile=="") {
-      stop("Why do you need to run plink2 if you're not using pfile?")
+      # stop("Why do you need to run plink2 if you're not using pfile?")
     } else if(!is.null(bfile)) {
       if(bfile != pfile) stop("If you specify both pfile and bfile, they should have the same stub.")
-      pars$pbfile <- pfile
+      pars$bpfile <- pfile
     } else {
       pars$pfile <- pfile
     }
@@ -81,15 +79,15 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
       .bim <- paste0(pars$pfile, ".pvar")
       .fam <- paste0(pars$pfile, ".psam")
     }
+    class(pfile) <- unique(c("pfile", class(pfile)))
+
   }
 
   ## bfile
   if(is.null(bfile)) {
     if(exists(".bfile", envir=.GlobalEnv, inherits=F)) {
       .bfile <- get(".bfile", envir=.GlobalEnv, inherits=F)
-      if(inherits(.bfile, "bfile")) {
-        pars$bfile <- .bfile
-      }
+      pars$bfile <- .bfile
     }
   } else if(bfile=="") {
     # Do nothing
@@ -106,6 +104,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   ## replace.bim/replace.fam
   if(!is.null(replace.bim) || !is.null(replace.fam)) {
     if(bfile == "") stop("bfile must be specified!")
+    if(!is.null(pars$pfile)) stop("You cannot specify pfile with replace.bim/replace.fam yet.")
     pars$bed <- .bed
     pars$bim <- .bim
     pars$fam <- .fam
@@ -204,10 +203,9 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     extract <- ""
   } else if(is.logical(extract)) {
     ## A vector of logicals is given
-    bimfile <- read.table2(.bim)
+    bimfile <- read.bim(.bim, pfile=!is.null(pars$pfile), add.ext=F)
     stopifnot(length(extract) == nrow(bimfile))
-    # stopifnot(length(unique(bimfile[,2])) == nrow(bimfile))
-    kept.bimfile <- bimfile[extract, 2, drop=F]
+    kept.bimfile <- bimfile$ID[extract]
     write.table2(kept.bimfile, file=extractfile <- tempfile(pattern="extract"))
     pars$extract <- extractfile
   } else if(is.vector(extract)) {
@@ -235,10 +233,9 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     exclude <- ""
   } else if(is.logical(exclude)) {
     ## A vector of logicals is given
-    bimfile <- read.table2(.bim)
+    bimfile <- read.bim(.bim, pfile=!is.null(pars$pfile), add.ext=F)
     stopifnot(length(exclude) == nrow(bimfile))
-    stopifnot(length(unique(bimfile[,2])) == nrow(bimfile))
-    kept.bimfile <- bimfile[exclude, 2, drop=F]
+    kept.bimfile <- bimfile$ID[exclude]
     write.table2(kept.bimfile, file=excludefile <- tempfile(pattern="exclude"))
     pars$exclude <- excludefile
   } else if(is.vector(exclude)) {
@@ -281,8 +278,8 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
         stopifnot(ncol(pheno) == 3)
       } else {
         if(!exists("famfile", inherits=F))
-          famfile <- read.table2(.fam)
-        pheno.data.frame <- famfile[,1:2]
+          famfile <- read.fam(.fam, pfile=!is.null(pars$pfile), add.ext=F)
+        pheno.data.frame <- famfile[,c("FID", "IID")]
         stopifnot(length(pheno) == nrow(famfile))
         pheno <- cbind(pheno.data.frame, pheno)
       }
@@ -304,8 +301,8 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
       if(is.matrix(covar)) covar <- as.data.frame(covar)
       if(!all(c("FID", "IID") %in% colnames(covar))) {
         if(!exists("famfile", inherits=F))
-          famfile <- read.table2(.fam)
-        covar.data.frame <- famfile[,1:2]
+          famfile <- read.fam(.fam, pfile=!is.null(pars$pfile), add.ext=F)
+        covar.data.frame <- famfile[,c("FID", "IID")]
         stopifnot(nrow(covar) == nrow(famfile))
         covar <- cbind(covar.data.frame, covar)
       }
@@ -344,18 +341,26 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   plink.command <- parse.plink.options(pars)
   plink.command <- paste(plink.command, cmd)
 
-  outfile <- pars$out
 
   if(test) {
     attributes(plink.command) <- pars
     return(plink.command)
   } else {
+    pars$class <- "plinkout"
+    outfile <- pars$out
     run.plink(plink.command)
     attributes(outfile) <- pars
-    if(savelog) {
-      logfile <- paste0(outfile, ".log")
-      if(file.exists(logfile))
-        attr(outfile, "log") <- readChar(logfile, file.info(logfile)$size)
+
+    logfile <- paste0(outfile, ".log")
+    if(file.exists(logfile)) {
+      log <- readChar(logfile, file.info(logfile)$size)
+      if(savelog) {
+        attr(outfile, "log") <- log
+      }
+      has.pgen <- grepl(paste0(outfile, ".pgen"), log)
+      has.bed <- grepl(paste0(outfile, ".pgen"), log)
+      if(has.pgen) pars$class <- c("pfile", "bfile", pars$class) else
+        if(has.bed) pars$class <- c("bfile", pars$class)
     }
     return(outfile)
   }
