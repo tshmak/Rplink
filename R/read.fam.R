@@ -12,7 +12,7 @@ read.fam <- function(bfile, pfile=F, add.ext=TRUE) {
   }
 
   ext <- if(add.ext) ".fam" else ""
-  fam <- read.table.plink(bfile, ext)
+  fam <- read.table.plink(bfile, ext, header=FALSE)
   colnames(fam)[1:5] <- c("FID", "IID", "PAT", "MAT", "SEX")
   return(fam)
 

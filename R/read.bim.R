@@ -12,7 +12,7 @@ read.bim <- function(bfile, pfile=F, add.ext=TRUE) {
   }
 
   ext <- if(add.ext) ".bim" else ""
-  bim <- read.table.plink(bfile, ext)
+  bim <- read.table.plink(bfile, ext, header=FALSE)
   colnames(bim)[1:6] <- c("CHROM", "ID", "CM", "POS", "ALT", "REF")
   return(bim)
 
