@@ -1,93 +1,110 @@
-subsample <- function(..., n=NULL,p=NULL, fill.missing.a2=T, QC=T, chr=NULL,
-                        geno= 0.01, hwe= 0.00001, maf=0.01, out=NULL, 
-                        P=ifelse(QC,p*2,p), within.chromosome=F) {
+subsample <- function(..., n=NULL,p=NULL, fill.missing.a2=T,
+                      QC=T, chr=NULL,
+                      geno= 0.01, hwe= 0.00001, maf=0.01, mind=0.01,
+                      out=NULL, contiguous=TRUE,
+                      P=ifelse(QC,p*2,p), within.chromosome=F,
+                      silent=TRUE) {
 
   #' Function to obtain a random subset of a bfile
   #' @param P Over-sampling to account for deletion from QC
   #' @within.chromosome sample within chromosome
 
-  #### filter on chromosome first ####
-  if(within.chromosome || !is.null(chr)) {
-    if(is.null(chr)) {
-      CHR <- read.table2(paste0(bfile, ".bim"))[,1]
-      chr <- sample(CHR,1)
-      cat("Chromosome ", chr, "chosen\n")
-    }
-    bfile <- plink(cmd="--make-bed", chr=chr,  ...)
-  } else if(sum(names(list(...)) != "bfile") > 0) {
-    bfile <- plink(cmd="--make-bed", ...)
-  } else if(is.null(list(...)$bfile)) {
-    if(exists(".bfile", envir = .GlobalEnv)) {
-      bfile <- get(".bfile", envir=.GlobalEnv)
-    } else {
-      stop("bfile not specified and .bfile not found in .GlobalEnv")
-    }
-  } else bfile <- list(...)$bfile
+  options <- attributes(plink(cmd="test", test=T, ...))
 
-#   dim.bfile <- dim.bfile(bfile)
-  nrow <- nrow.bfile(bfile)
-  ncol <- ncol.bfile(bfile)
+  bim <- read.bim(options[["bfile", exact=T]])
+  #### filter on chr first ####
+  if(is.null(chr)) chr <- unique(bim$CHROM)
+  if(within.chromosome) {
+    cat("Chromosome ", chr, "chosen\n")
+    chr <- sample(chr, 1)
+  }
+  toextract <- bim$ID[bim$CHROM %in% chr]
+
+  #### extract/exclude ####
+  if(!is.null(options[["extract", exact=T]])) {
+    extract.snps <- read.table2(options[["extract", exact=T]], sep="\t",
+                                header=FALSE) # "\t to ensure if there are semicolons in the SNP name it doesn't upset the read
+    toextract <- intersect(toextract, extract.snps$V1)
+  }
+  if(!is.null(options[["exclude", exact=T]])) {
+    exclude.snps <- read.table2(options[["exclude", exact=T]], sep="\t",
+                                header=FALSE)
+    toextract <- toextract[!(toextract %in% exclude.snps$V1)]
+  }
+
+  #### keep/remove ####
+  fam <- read.fam(options[["bfile", exact=T]])
+  tokeep <- fam[,1:2]
+  if(!is.null(options[["keep", exact=T]])) {
+    keep2 <- read.table2(options[["keep", exact=T]], header=FALSE)
+    colnames(keep2)[1:2] <- c("FID", "IID")
+    tokeep <- merge(tokeep, keep2[,1:2])
+  }
+  if(!is.null(options[["remove", exact=T]])) {
+    remove2 <- read.table2(options[["remove", exact=T]], header=FALSE)
+    colnames(remove2)[1:2] <- c("FID", "IID")
+    remove2 <- cbind(remove2[,1:2], toexclude=TRUE)
+    tokeep <- merge(tokeep, remove2, all.x=TRUE)
+    tokeep$toexclude[is.na(tokeep$toexclude)] <- FALSE
+    tokeep <- subset(tokeep, !toexclude, select=1:2)
+  }
+
+  ncol <- length(toextract)
+  nrow <- nrow(tokeep)
 
   #### sample ####
-  if(!is.null(n) && !is.null(p)) {
+  if(!is.null(n)) {
     stopifnot(n <= nrow)
+
+    tokeep.sample <- sample(nrow, n)
+    tokeep <- tokeep[tokeep.sample, ]
+
+  }
+  if(!is.null(p)) {
     stopifnot(p <= ncol)
 
     P <- min(ncol, P)
 
-    start <- sample(ncol - P + 1, 1)
-    end <- start + P - 1
-    tokeep <- sample(nrow, n)
-    tokeep <- logical.vector(tokeep, nrow)
-    toextract <- logical.vector(start:end, ncol)
-    bfile <- plink(bfile=bfile, extract=toextract,
-                   keep=tokeep, 
-                   cmd="--make-bed")
-  } else if(!is.null(n)) {
-    stopifnot(n <= nrow)
-
-    tokeep <- sample(nrow, n)
-    tokeep <- logical.vector(tokeep, nrow)
-    bfile <- plink(bfile=bfile, keep=tokeep, 
-                   cmd="--make-bed")
-
-  } else if(!is.null(p)) {
-    stopifnot(p <= ncol)
-
-    P <- min(ncol, P)
-
-    start <- sample(ncol - P + 1, 1)
-    end <- start + P - 1
-    toextract <- logical.vector(start:end, ncol)
-    bfile <- plink(bfile=bfile, extract=toextract, 
-                   cmd="--make-bed")
-  } 
+    if(contiguous) {
+      start <- sample(ncol - P + 1, 1)
+      end <- start + P - 1
+      toextract <- toextract[start:end]
+    } else {
+      toextract <- sample(toextract, P)
+    }
+  }
 
   #### QC ####
   if(QC) {
-    cmd <- paste("--geno", geno, "--hwe", hwe, "--maf", maf, "--make-bed")
-    bfile <- plink(bfile=bfile, cmd=cmd)
-    
-    remaining.ncol <- ncol.bfile(bfile)
-    
+    cmd <- paste("--geno", geno, "--hwe", hwe, "--maf", maf, "--mind", mind,
+                 "--make-just-bim")
+    qc <- plink(bfile=options$bfile,
+                cmd=cmd, extract=toextract, keep=tokeep,
+                silent=silent)
+    qc.bim <- read.bim(qc)
+
+    remaining.ncol <- nrow(qc.bim)
+
     if(!is.null(p)) {
-      if(remaining.ncol < p)
-        warning("Number of cols less than p after QC. Perhaps increase P.")
-      
-      start <- sample(remaining.ncol - p + 1, 1)
-      end <- start + p - 1
-      bfile <- plink(bfile=bfile, extract=logical.vector(start:end, remaining.ncol),
-                     cmd="--make-bed")
+      if(remaining.ncol < p) {
+        cat("Only", remaining.ncol, "variants left after QC.\n",
+            ifelse(P < ncol, "Perhaps increase P.\n", ""))
+      }
+
+      if(contiguous) {
+        start <- sample(remaining.ncol - p + 1, 1)
+        end <- start + p - 1
+        toextract <- qc.bim$ID[start:end]
+      } else {
+        toextract <- sample(qc.bim$ID, p)
+      }
     }
-  } 
-  
-  #### Impute and out ####
-  cmd <- "--make-bed"
-  if(fill.missing.a2) cmd <- paste(cmd, "--fill-missing-a2")
-  if(!is.null(out)) {
-    bfile <- plink(bfile=bfile,cmd=cmd, out=out)
-  } else if(fill.missing.a2) {
-    bfile <- plink(bfile=bfile,cmd=cmd)
   }
+
+  #### Impute and out ####
+  bfile <- plink(bfile=options$bfile, silent=silent, keep=tokeep,
+                 extract=toextract, out=out,
+                 fill.missing.a2=fill.missing.a2,
+                 cmd="--make-bed")
   return(bfile)
 }
