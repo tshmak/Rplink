@@ -5,6 +5,9 @@ parse.plink.options <- function(options) {
   cmd <- ""
   for(i in 1:l) {
     if(is.null(options[[i]])) options[[i]] <- ""
+    if(is.logical(options[[i]])) {
+      if(options[[i]]) options[[i]] <- "" else next
+    }
     cmd <- paste(cmd, paste0("--", Names[i]), options[[i]])
   }
   return(cmd)
