@@ -1,4 +1,4 @@
-plink <- function(bfile=NULL, out=tempfile(pattern="out"),
+plink <- function(bfile=NULL, out=NULL,
                   keep=NULL, remove=NULL,
                   extract=NULL, exclude=NULL,
                   chr=NULL, pheno=NULL,
@@ -16,6 +16,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
                   replace.fam=NULL,
                   pfile=NULL,
                   plink2=FALSE,
+                  sametemp=FALSE,
                   ...) {
 
   #   Wrapper function to call plink with various defaults. Function will return
@@ -63,7 +64,13 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     if(is.null(pfile)) {
       if(exists(".bfile", envir=.GlobalEnv, inherits=F)) {
         .bfile <- get(".bfile", envir=.GlobalEnv, inherits=F)
-        pars$pfile <- .bfile
+        if(inherits(.bfile, "pfile")) {
+          pars$pfile <- .bfile
+        } else {
+          # stop("Why do you need to run plink2 if you're not using pfile?")
+        }
+      } else {
+        # stop("Why do you need to run plink2 if you're not using pfile?")
       }
     } else if(pfile=="") {
       # stop("Why do you need to run plink2 if you're not using pfile?")
@@ -78,8 +85,8 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
       .bed <- paste0(pars$pfile, ".pgen")
       .bim <- paste0(pars$pfile, ".pvar")
       .fam <- paste0(pars$pfile, ".psam")
+      class(pfile) <- unique(c("pfile", class(pfile)))
     }
-    class(pfile) <- unique(c("pfile", class(pfile)))
 
   } else {
     if(!is.null(pfile)) stop("pfile can only be specified with the plink2 option.")
@@ -105,7 +112,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
 
   ## replace.bim/replace.fam
   if(!is.null(replace.bim) || !is.null(replace.fam)) {
-    if(bfile == "") stop("bfile must be specified!")
+    if(is.null(pars$bfile)) stop("bfile must be specified!")
     if(!is.null(pars$pfile)) stop("You cannot specify pfile with replace.bim/replace.fam yet.")
     pars$bed <- .bed
     pars$bim <- .bim
@@ -117,13 +124,13 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
 
       if(is.character(replace.bim) && length(replace.bim) == 1) {
         ## A file is given
-        pars$bim <- replace.bim
+        .bim <- pars$bim <- replace.bim
       }
       else if(is.data.frame(replace.bim)) {
         # stopifnot(nrow(replace.bim) == ncol.bfile(bfile))
         write.table2(replace.bim,
                      file=replace.bimfile <- tempfile(pattern="replace.bim"))
-        pars$bim <- replace.bimfile
+        .bim <- pars$bim <- replace.bimfile
       }
       else {
         stop("Don't know what to do yet...")
@@ -136,13 +143,13 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
 
       if(is.character(replace.fam) && length(replace.fam) == 1) {
         ## A file is given
-        pars$fam <- replace.fam
+        .fam <- pars$fam <- replace.fam
       }
       else if(is.data.frame(replace.fam)) {
         # stopifnot(nrow(replace.fam) == nrow.bfile(bfile))
         write.table2(replace.fam,
                      file=replace.famfile <- tempfile(pattern="replace.fam"))
-        pars$fam <- replace.famfile
+        .fam <- pars$fam <- replace.famfile
       }
       else {
         stop("Don't know what to do yet...")
@@ -153,6 +160,18 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
   }
 
   ## out
+  if(is.null(out)) {
+    if(sametemp) {
+      if(exists(".Rplink.tempout", envir=.GlobalEnv, inherits = FALSE)) {
+        out <- get(".Rplink.tempout", envir=.GlobalEnv, inherits = FALSE)
+      } else {
+        out <- tempfile(pattern="out")
+        assign(".Rplink.tempout", out, envir = .GlobalEnv)
+      }
+    } else {
+      out <- tempfile(pattern="out")
+    }
+  }
   pars$out <- out
 
   ## keep
@@ -163,10 +182,11 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     pars$keep <- keep
   } else if(is.logical(keep)) {
     ## A vector of logicals is given
+    if(!exists(".fam")) stop("Can't find .fam. Maybe bfile not defined.")
     famfile <- read.fam(.fam, pfile=!is.null(pars$pfile), add.ext=F)
     stopifnot(length(keep) == nrow(famfile))
-    kept.famfile <- famfile[keep, ]
-    write.table2(kept.famfile, file=keepfile <- tempfile(pattern="keep"))
+    famfile.selected <- famfile[keep, ]
+    write.table2(famfile.selected, file=keepfile <- tempfile(pattern="keep"))
     pars$keep <- keepfile
   } else if(is.list(keep)) {
     stopifnot(!is.null(keep$FID) && !is.null(keep$IID))
@@ -185,11 +205,12 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     pars$remove <- remove
   } else if(is.logical(remove)) {
     ## A vector of logicals is given
+    if(!exists(".fam")) stop("Can't find .fam. Maybe bfile not defined.")
     if(!exists("famfile", inherits=F))
       famfile <- read.table2(.fam)
     stopifnot(length(remove) == nrow(famfile))
-    kept.famfile <- famfile[remove, ]
-    write.table2(kept.famfile, file=removefile <- tempfile(pattern="remove"))
+    famfile.selected <- famfile[remove, ]
+    write.table2(famfile.selected, file=removefile <- tempfile(pattern="remove"))
     pars$remove <- removefile
   } else if(is.list(remove)) {
     stopifnot(!is.null(remove$FID) && !is.null(remove$IID))
@@ -205,10 +226,12 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     extract <- ""
   } else if(is.logical(extract)) {
     ## A vector of logicals is given
+    if(!exists(".bim")) stop("Can't find .bim. Maybe bfile not defined.")
     bimfile <- read.bim(.bim, pfile=!is.null(pars$pfile), add.ext=F)
     stopifnot(length(extract) == nrow(bimfile))
-    kept.bimfile <- bimfile$ID[extract]
-    write.table2(kept.bimfile, file=extractfile <- tempfile(pattern="extract"))
+    snps.selected <- bimfile$ID[extract]
+    stopifnot(check.duplicated.ID(bimfile, snps=snps.selected))
+    write.table2(snps.selected, file=extractfile <- tempfile(pattern="extract"))
     pars$extract <- extractfile
   } else if(is.vector(extract)) {
     if(is.numeric(extract))
@@ -235,10 +258,12 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
     exclude <- ""
   } else if(is.logical(exclude)) {
     ## A vector of logicals is given
+    if(!exists(".bim")) stop("Can't find .bim. Maybe bfile not defined.")
     bimfile <- read.bim(.bim, pfile=!is.null(pars$pfile), add.ext=F)
     stopifnot(length(exclude) == nrow(bimfile))
-    kept.bimfile <- bimfile$ID[exclude]
-    write.table2(kept.bimfile, file=excludefile <- tempfile(pattern="exclude"))
+    snps.selected <- bimfile$ID[exclude]
+    stopifnot(check.duplicated.ID(bimfile, snps=snps.selected))
+    write.table2(snps.selected, file=excludefile <- tempfile(pattern="exclude"))
     pars$exclude <- excludefile
   } else if(is.vector(exclude)) {
     if(is.numeric(exclude)) {
@@ -276,9 +301,10 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
       pars$no.pheno <- ""
     } else if(is.numeric(pheno) || is.data.frame(pheno)) {
       if(is.data.frame(pheno)) {
-        stopifnot(c("FID", "IID" %in% colnames(pheno)))
-        stopifnot(ncol(pheno) == 3)
+        stopifnot(all(c("FID", "IID") %in% colnames(pheno)))
+        stopifnot(ncol(pheno) >= 3)
       } else {
+        if(!exists(".fam")) stop("Can't find .fam. Maybe bfile not defined.")
         if(!exists("famfile", inherits=F))
           famfile <- read.fam(.fam, pfile=!is.null(pars$pfile), add.ext=F)
         pheno.data.frame <- famfile[,c("FID", "IID")]
@@ -302,6 +328,7 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
       if(is.vector(covar)) covar <- matrix(covar, ncol=1)
       if(is.matrix(covar)) covar <- as.data.frame(covar)
       if(!all(c("FID", "IID") %in% colnames(covar))) {
+        if(!exists(".fam")) stop("Can't find .fam. Maybe bfile not defined.")
         if(!exists("famfile", inherits=F))
           famfile <- read.fam(.fam, pfile=!is.null(pars$pfile), add.ext=F)
         covar.data.frame <- famfile[,c("FID", "IID")]
@@ -341,6 +368,12 @@ plink <- function(bfile=NULL, out=tempfile(pattern="out"),
 
   #################################################################
   options <- list(...)
+  if(plink2) {
+    pars$silent <- NULL # Somehow plink2 doesn't support --silent at the mo.
+    pars$keep.allele.order <- NULL
+    pars$allow.no.sex <- NULL
+  }
+
   pars <- c(pars, options)
   plink.command <- parse.plink.options(pars)
   plink.command <- paste(plink.command, cmd)
