@@ -22,6 +22,7 @@ if(Sys.info()["sysname"] == "Windows") {
   # }
   if(Sys.info()["nodename"] == "GRC170") {
     options(Rplink.plink.exec="/home/tshmak/software/plink/v1.90b5.2/plink")
+    options(Rplink.plink2.exec="/home/tshmak/software/plink/v2.00a2LM_AVX2_20180605/plink2")
     # options(Rplink.plink2.exec="/home2/groups/pcsham/projects/UKB/plink2/plink2")
   } else {
     options(Rplink.plink.exec="/home/tshmak/software/plink/v1.90b4.4/plink")
